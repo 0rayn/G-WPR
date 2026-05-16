@@ -1,0 +1,30 @@
+
+# 📝 Engineering Notes: MT7628KN Hardware Bringup
+
+## 🛠️ Hardware Profile
+
+* **Device:** Generic Wall-Plug Wi-Fi Repeater ($5.00/each).
+* **SoC:** MediaTek **MT7628KN** (MIPS32 24KEc core @ **575 MHz**).
+* **System RAM:** **8 MB DDR1** (Integrated inside the CPU package; non-upgradeable).
+* **SPI Flash:** Macronix **MX-12G** (**4 MB** non-volatile storage).
+* **Green Loop Pinout (3-Pin Debug Header):**
+* **Pin 1:** `GND` (True Digital Ground, 0V).
+* **Pin 2:** `TX` (Serial Transmit, sits at **$3.24\text{V}$** idle / Active High).
+* **Pin 3:** `RX` (Serial Receive, sits at **$0\text{V}$** waiting for input).
+
+
+
+---
+
+## 💾 Software Profile
+
+* **Bootloader:** **Ralink U-Boot Version 4.3.0.0** (Built on U-Boot 1.1.3, dated Dec 13, 2017).
+* **Serial Configuration:** `57600 baud`, 8N1 logic levels.
+* **Console Access:** Unlocked. Sending character `4` aborts autoboot and opens the `MT7628 #` command line prompt.
+* **U-Boot Network Environment:**
+* `ipaddr = 192.168.11.8` (Repeater static IP)
+* `serverip = 192.168.11.11` (Expected TFTP host machine IP)
+
+* **Stock OS:** Compressed **830.7 KB** legacy Linux firmware image named **`zxrouter`** running a minimal BusyBox environment.
+
+---
