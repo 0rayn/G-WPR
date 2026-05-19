@@ -1,0 +1,94 @@
+Your input is 0!
+===Some 11n statistics variables: 
+../../common/action.c
+ACTION - HT Notify Channel bandwidth action----> 
+ACTION - SMPS action----> 
+ACTION - 20/40 BSS Coexistence Management action----> 
+20/40 BSS CoexMgmt=%d, bForty_Mhz_Intolerant=%d, ignore this action!!
+%s: input arguments error
+%s - IE_MEASUREMENT_REPORT., ChNum=%d StartTime=%lld Duration=%d CCA_Busy_Fraction=%d.
+Dump TR_ENTRY called by function %s(%d)
+For this chip, no specified channel switch function!
+%s(): NotSupported Chip for this function!
+../../common/ba_action.c
+/var/wps_profile.dat
+%s, no tx test frame callback function
+ap_cmm_peer_assoc_req_action
+WARNING : The maximum input size is %d bits long
+get/show variable
+set variablle value
+del variablle
+Press '.' to end input data, <enter> skip to input next data
+Server failure or invalid input
+Multi part input
+rn_init: radix functions require max_keylen be set
+igmp_input rti:NULL
+rsvp_input: Sending packet up old-style socket
+[ccp_datainput]:sending reset request
+Argument to math function outside valid domain
+        <input type="hidden" name="FLG" value="1">
+        <input type="hidden" name="CMD" value="SYS_CONF">
+        <input type="hidden" name="GO" value="allset.html">
+        <input type="hidden" name="CCMD" value="100">
+$(function() {
+	$('#close_btn').on('click', function() {
+	$('#changepwd').on('click', function() {
+	$('#restore').on('click', function() {
+	$('#restore_btn').on('click', function() {
+		var f=document.frmSetup;
+		f.action="do_cmd.htm";
+	$('#reboot').on('click', function() {
+	$('#reboot_btn').on('click', function() {
+		var f=document.frmSetup;
+		f.action="do_cmd.htm";
+	$('#upgrade').on('click', function() {
+				<input type="text" id="admpass" name="admpass" maxlength="16">
+				<input type="text" id="admpass2" name="admpass2" maxlength="16">
+$(function() {
+	$('#close_btn').on('click', function() {
+	$('#back_btn').on('click', function() {
+	$('#adm_btn').on('click', function() {
+		var f=document.frmSetup;
+	var go;
+	var flg;
+	var nowait='0';
+	var cmd;
+	var wait_time=30;
+	var go='';
+	var flg='';
+	var cmd='';
+	var nowait='';
+	function init(){
+		var httpAutErrorArray = new Array(
+		function keyLogin()
+        <form  method="get" action="login.htm" name="LOGIN">
+              <input type="hidden" name="CMD" id="CMD" value= "USERLOGIN"/><input type="hidden" maxlength="16" name="username" value="admin" /> <input type="password" id="pcPassword" name="pcPassword" maxlength="16" value="admin">
+			var f=document.LOGIN;
+			var ErrNum = httpAutErrorArray[0];
+			var mylang1=getCfg("lang");
+			$(function() {
+				$('#lang').on('change', function() {
+				$('#login_btn').on('click', function() {
+					var f=document.LOGIN;
+					var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+				$('#close_btn').on('click', function() {
+		var httpAutErrorArray = new Array(
+		function keyLogin()
+        <form  method="get" action="login.htm" name="LOGIN">
+              <input type="hidden" name="CMD" id="CMD" value= "USERLOGIN"/><input type="hidden" maxlength="16" name="username" value="admin" /> <input type="password" id="pcPassword" name="pcPassword" maxlength="16" value="admin">
+			var f=document.LOGIN;
+			var ErrNum = httpAutErrorArray[0];
+			var mylang1=getCfg("lang");
+			$(function() {
+				$('#lang').on('change', function() {
+				$('#login_btn').on('click', function() {
+					var f=document.LOGIN;
+					var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+				$('#close_btn').on('click', function() {
+input[type=text],
+input[type=password]{
+input[type=text]:focus,
+input[type=password]:focus{
+	input[type=text],
+	input[type=password],
+	input[type=file]{

